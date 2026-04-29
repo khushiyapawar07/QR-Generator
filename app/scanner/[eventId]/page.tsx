@@ -30,6 +30,7 @@ export default function ScannerEventPage({ params }: { params: Promise<{ eventId
   const [scannerError, setScannerError] = useState<string | null>(null);
   const [scannerReady, setScannerReady] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
+  const [isProcessingCameraScan, setIsProcessingCameraScan] = useState(false);
   const scannerElementId = "gateqr-scanner";
 
   async function startCameraScanner() {
@@ -45,8 +46,13 @@ export default function ScannerEventPage({ params }: { params: Promise<{ eventId
         { facingMode: "environment" },
         { fps: 10, qrbox: { width: 260, height: 260 } },
         async (decodedText) => {
-          if (loading) return;
-          await handleCheckin(decodedText);
+          if (loading || isProcessingCameraScan) return;
+          const qrToken = decodedText.trim();
+          if (!qrToken) return;
+          setIsProcessingCameraScan(true);
+          await stopCameraScanner();
+          await handleCheckin(qrToken);
+          setIsProcessingCameraScan(false);
         },
         () => {
           // Ignore per-frame decode failures.
@@ -127,15 +133,15 @@ export default function ScannerEventPage({ params }: { params: Promise<{ eventId
           <button
             type="button"
             onClick={startCameraScanner}
-            disabled={isScanning}
+            disabled={isScanning || isProcessingCameraScan}
             className="btn-primary disabled:opacity-60"
           >
-            {scannerReady ? "Restart Camera" : "Start Camera Scanner"}
+            {isScanning ? "Camera Running" : scannerReady ? "Scan Next QR" : "Start Camera Scanner"}
           </button>
           <button
             type="button"
             onClick={stopCameraScanner}
-            disabled={!isScanning}
+            disabled={!isScanning || isProcessingCameraScan}
             className="btn-secondary disabled:opacity-60"
           >
             Stop Camera
