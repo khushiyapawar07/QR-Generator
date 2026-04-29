@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { withDB } from "@/lib/db";
+import { readDB } from "@/lib/db";
 
 export async function GET(
   _request: Request,
@@ -7,36 +7,35 @@ export async function GET(
 ) {
   const { eventId } = await params;
 
-  const csv = await withDB(async (db) => {
-    const rows = db.attendees.filter((a) => a.eventId === eventId);
-    const header = [
-      "name",
-      "email",
-      "phone",
-      "company",
-      "designation",
-      "status",
-      "checkedInAt",
-      "qrToken",
-    ];
+  const db = await readDB();
+  const rows = db.attendees.filter((a) => a.eventId === eventId);
+  const header = [
+    "name",
+    "email",
+    "phone",
+    "company",
+    "designation",
+    "status",
+    "checkedInAt",
+    "qrToken",
+  ];
 
-    const lines = rows.map((row) =>
-      [
-        row.name,
-        row.email ?? "",
-        row.phone ?? "",
-        row.company ?? "",
-        row.designation ?? "",
-        row.status,
-        row.checkedInAt ?? "",
-        row.qrToken,
-      ]
-        .map(escapeCsv)
-        .join(","),
-    );
+  const lines = rows.map((row) =>
+    [
+      row.name,
+      row.email ?? "",
+      row.phone ?? "",
+      row.company ?? "",
+      row.designation ?? "",
+      row.status,
+      row.checkedInAt ?? "",
+      row.qrToken,
+    ]
+      .map(escapeCsv)
+      .join(","),
+  );
 
-    return [header.join(","), ...lines].join("\n");
-  });
+  const csv = [header.join(","), ...lines].join("\n");
 
   return new NextResponse(csv, {
     headers: {

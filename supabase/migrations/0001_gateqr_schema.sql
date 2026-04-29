@@ -26,7 +26,7 @@ create table if not exists attendees (
   status text not null default 'unused'
     check (status in ('unused', 'used', 'blocked', 'cancelled')),
   checked_in_at timestamptz,
-  checked_in_by uuid,
+  checked_in_by text,
   created_at timestamptz not null default now(),
   unique (event_id, qr_token)
 );

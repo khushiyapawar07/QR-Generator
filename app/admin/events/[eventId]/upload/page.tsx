@@ -15,21 +15,33 @@ interface Attendee {
 
 export default function UploadPage({ params }: { params: Promise<{ eventId: string }> }) {
   const { eventId } = use(params);
+  const pageSize = 100;
   const [file, setFile] = useState<File | null>(null);
   const [summary, setSummary] = useState<Record<string, unknown> | null>(null);
   const [attendees, setAttendees] = useState<Attendee[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  async function loadAttendees(id: string) {
-    const res = await fetch(`/api/events/${id}/attendees`);
+  async function loadAttendees(id: string, requestedPage = 1) {
+    setLoadError(null);
+    const res = await fetch(`/api/events/${id}/attendees?page=${requestedPage}&limit=${pageSize}`);
     const data = await res.json();
+    if (!res.ok) {
+      setLoadError(data.message ?? "Failed to load attendees.");
+      return;
+    }
     setAttendees(data.data ?? []);
+    setTotal(data.total ?? 0);
+    setHasMore(Boolean(data.hasMore));
+    setPage(data.page ?? requestedPage);
   }
 
   useEffect(() => {
-    fetch(`/api/events/${eventId}/attendees`)
-      .then((res) => res.json())
-      .then((data) => setAttendees(data.data ?? []));
+    void loadAttendees(eventId, 1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId]);
 
   async function uploadFile() {
@@ -44,7 +56,7 @@ export default function UploadPage({ params }: { params: Promise<{ eventId: stri
       });
       const data = await res.json();
       setSummary(data);
-      await loadAttendees(eventId);
+      await loadAttendees(eventId, 1);
     } finally {
       setLoading(false);
     }
@@ -92,16 +104,23 @@ export default function UploadPage({ params }: { params: Promise<{ eventId: stri
       </div>
 
       {summary && (
-        <pre className="overflow-auto rounded-xl bg-slate-900 p-4 text-xs text-slate-100">
-          {JSON.stringify(summary, null, 2)}
-        </pre>
+        <div className="card space-y-2 p-4 text-sm">
+          <p className="font-semibold text-slate-900">Upload Summary</p>
+          <div className="grid gap-2 md:grid-cols-3">
+            <p>Total rows: {String(summary.totalRows ?? "-")}</p>
+            <p>Imported: {String(summary.importedRows ?? "-")}</p>
+            <p>Failed: {String(summary.failedRows ?? "-")}</p>
+          </div>
+        </div>
       )}
 
       <div className="grid grid-cols-3 gap-4">
-        <div className="card p-4">Total: {attendees.length}</div>
-        <div className="card p-4">Checked In: {checkedIn}</div>
-        <div className="card p-4">Pending: {attendees.length - checkedIn}</div>
+        <div className="card p-4">Total: {total}</div>
+        <div className="card p-4">Checked In (this page): {checkedIn}</div>
+        <div className="card p-4">Current Page Rows: {attendees.length}</div>
       </div>
+
+      {loadError && <div className="card p-4 text-sm text-rose-600">{loadError}</div>}
 
       <div className="card overflow-hidden">
         <table className="w-full text-sm">
@@ -121,7 +140,7 @@ export default function UploadPage({ params }: { params: Promise<{ eventId: stri
                 <td className="p-3">{attendee.company ?? "-"}</td>
                 <td className="p-3">{attendee.status}</td>
                 <td className="p-3">
-                  <code className="text-xs">{attendee.qrToken}</code>
+                  <code className="text-xs">{`${attendee.qrToken.slice(0, 18)}...`}</code>
                 </td>
                 <td className="p-3">
                   <a
@@ -135,6 +154,26 @@ export default function UploadPage({ params }: { params: Promise<{ eventId: stri
             ))}
           </tbody>
         </table>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          className="btn-secondary text-sm disabled:opacity-60"
+          disabled={page <= 1 || loading}
+          onClick={() => void loadAttendees(eventId, page - 1)}
+        >
+          Previous
+        </button>
+        <p className="text-sm text-slate-600">Page {page}</p>
+        <button
+          type="button"
+          className="btn-secondary text-sm disabled:opacity-60"
+          disabled={!hasMore || loading}
+          onClick={() => void loadAttendees(eventId, page + 1)}
+        >
+          Next
+        </button>
       </div>
     </div>
   );

@@ -12,6 +12,7 @@ const baseDataDir =
   process.env.VERCEL === "1" ? path.join(os.tmpdir(), "gateqr-data") : path.join(process.cwd(), "data");
 const dataDir = baseDataDir;
 const dbPath = path.join(dataDir, "db.json");
+const isVercelRuntime = process.env.VERCEL === "1";
 
 const defaultDB: DBShape = {
   events: [],
@@ -160,6 +161,12 @@ export async function readDB(): Promise<DBShape> {
     );
   }
 
+  if (isVercelRuntime) {
+    throw new Error(
+      "Supabase service role env vars are missing. Configure NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY on Vercel.",
+    );
+  }
+
   await mkdir(dataDir, { recursive: true });
 
   try {
@@ -174,16 +181,16 @@ export async function readDB(): Promise<DBShape> {
 export async function writeDB(db: DBShape): Promise<void> {
   const supabase = getSupabaseServiceClient();
   if (supabase) {
-    const [eventsRes, attendeesRes, scanLogsRes] = await Promise.all([
-      supabase.from("events").upsert(db.events.map(mapDBEventToSupabase)),
-      supabase.from("attendees").upsert(db.attendees.map(mapDBAttendeeToSupabase)),
-      supabase.from("scan_logs").upsert(db.scanLogs.map(mapDBScanLogToSupabase)),
-    ]);
+    void db;
+    throw new Error(
+      "writeDB() does not support Supabase mode. Use targeted per-route Supabase inserts/updates for safe concurrent writes.",
+    );
+  }
 
-    if (eventsRes.error) throw new Error(`Failed to write events: ${eventsRes.error.message}`);
-    if (attendeesRes.error) throw new Error(`Failed to write attendees: ${attendeesRes.error.message}`);
-    if (scanLogsRes.error) throw new Error(`Failed to write scan logs: ${scanLogsRes.error.message}`);
-    return;
+  if (isVercelRuntime) {
+    throw new Error(
+      "Supabase service role env vars are missing. Configure NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY on Vercel.",
+    );
   }
 
   await mkdir(dataDir, { recursive: true });

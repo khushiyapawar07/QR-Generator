@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { withDB } from "@/lib/db";
+import { readDB } from "@/lib/db";
 import { generateQrDataUrl, passSvg } from "@/lib/qr";
 
 export async function GET(
@@ -8,19 +8,15 @@ export async function GET(
 ) {
   const { eventId, attendeeId } = await params;
 
-  const payload = await withDB(async (db) => {
-    const event = db.events.find((row) => row.id === eventId);
-    const attendee = db.attendees.find((row) => row.id === attendeeId && row.eventId === eventId);
-    if (!event || !attendee) return null;
-
-    const qr = await generateQrDataUrl(attendee.qrToken);
-    const svg = passSvg(event.name, attendee.name, qr);
-
-    return {
-      svg,
-      fileName: `${attendee.name.replaceAll(/\s+/g, "_")}_QR.svg`,
-    };
-  });
+  const db = await readDB();
+  const event = db.events.find((row) => row.id === eventId);
+  const attendee = db.attendees.find((row) => row.id === attendeeId && row.eventId === eventId);
+  const payload = !event || !attendee
+    ? null
+    : {
+        svg: passSvg(event.name, attendee.name, await generateQrDataUrl(attendee.qrToken)),
+        fileName: `${attendee.name.replaceAll(/\s+/g, "_")}_QR.svg`,
+      };
 
   if (!payload) {
     return NextResponse.json({ success: false, message: "Pass not found" }, { status: 404 });

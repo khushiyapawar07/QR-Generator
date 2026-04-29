@@ -1,7 +1,7 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 "use client";
 
-import { FormEvent, use, useEffect, useState } from "react";
+import { FormEvent, use, useEffect, useRef, useState } from "react";
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from "html5-qrcode";
 
 type CheckinResult =
@@ -31,6 +31,7 @@ export default function ScannerEventPage({ params }: { params: Promise<{ eventId
   const [scannerReady, setScannerReady] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const [isProcessingCameraScan, setIsProcessingCameraScan] = useState(false);
+  const processingRef = useRef(false);
   const scannerElementId = "gateqr-scanner";
 
   async function startCameraScanner() {
@@ -46,13 +47,15 @@ export default function ScannerEventPage({ params }: { params: Promise<{ eventId
         { facingMode: "environment" },
         { fps: 10, qrbox: { width: 260, height: 260 } },
         async (decodedText) => {
-          if (loading || isProcessingCameraScan) return;
+          if (processingRef.current) return;
           const qrToken = decodedText.trim();
           if (!qrToken) return;
+          processingRef.current = true;
           setIsProcessingCameraScan(true);
           await stopCameraScanner();
           await handleCheckin(qrToken);
           setIsProcessingCameraScan(false);
+          processingRef.current = false;
         },
         () => {
           // Ignore per-frame decode failures.
@@ -77,6 +80,7 @@ export default function ScannerEventPage({ params }: { params: Promise<{ eventId
     } finally {
       (window as Window & { __gateqrScanner?: Html5Qrcode }).__gateqrScanner = undefined;
       setIsScanning(false);
+      processingRef.current = false;
     }
   }
 

@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { withDB } from "@/lib/db";
+import { readDB, withDB } from "@/lib/db";
+import { getSupabaseServiceClient } from "@/lib/supabase/server";
 import { EventRecord } from "@/lib/types";
 
 const createEventSchema = z.object({
@@ -13,7 +14,8 @@ const createEventSchema = z.object({
 });
 
 export async function GET() {
-  const data = await withDB(async (db) => db.events);
+  const db = await readDB();
+  const data = db.events;
   return NextResponse.json({ success: true, data });
 }
 
@@ -29,6 +31,7 @@ export async function POST(request: Request) {
   }
 
   const now = new Date().toISOString();
+  const supabase = getSupabaseServiceClient();
   const event: EventRecord = {
     id: randomUUID(),
     name: parsed.data.name,
@@ -39,6 +42,25 @@ export async function POST(request: Request) {
     status: "active",
     createdAt: now,
   };
+
+  if (supabase) {
+    const { error } = await supabase.from("events").insert({
+      id: event.id,
+      name: event.name,
+      venue: event.venue,
+      starts_at: event.startsAt,
+      ends_at: event.endsAt ?? null,
+      timezone: event.timezone,
+      status: event.status,
+      created_at: event.createdAt,
+    });
+
+    if (error) {
+      return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true, eventId: event.id, event });
+  }
 
   await withDB(async (db) => {
     db.events.unshift(event);

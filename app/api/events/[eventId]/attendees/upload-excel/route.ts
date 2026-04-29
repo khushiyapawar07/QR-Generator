@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { withDB } from "@/lib/db";
 import { generateQrToken } from "@/lib/qr";
+import { getSupabaseServiceClient } from "@/lib/supabase/server";
 import { parseUpload } from "@/lib/upload";
 import { AttendeeRecord } from "@/lib/types";
 
@@ -21,22 +22,73 @@ export async function POST(
   }
 
   const bytes = Buffer.from(await file.arrayBuffer());
+  const supabase = getSupabaseServiceClient();
 
   try {
     const parsed = parseUpload(file.name, bytes);
-    const existingTokens = new Set<string>();
     const now = new Date().toISOString();
     let importedRows = 0;
 
+    if (supabase) {
+      const { data: event, error: eventError } = await supabase
+        .from("events")
+        .select("id")
+        .eq("id", eventId)
+        .maybeSingle();
+      if (eventError) throw new Error(eventError.message);
+      if (!event) throw new Error("EVENT_NOT_FOUND");
+
+      const { data: existingRows, error: existingError } = await supabase
+        .from("attendees")
+        .select("qr_token")
+        .eq("event_id", eventId);
+      if (existingError) throw new Error(existingError.message);
+
+      const existingTokens = new Set<string>((existingRows ?? []).map((row) => row.qr_token));
+      const attendeesToInsert: Record<string, unknown>[] = [];
+
+      for (const row of parsed.rows) {
+        let token = generateQrToken(eventId);
+        while (existingTokens.has(token)) {
+          token = generateQrToken(eventId);
+        }
+        existingTokens.add(token);
+
+        attendeesToInsert.push({
+          id: randomUUID(),
+          event_id: eventId,
+          name: row.name,
+          email: row.email ?? null,
+          phone: row.phone ?? null,
+          company: row.company ?? null,
+          designation: row.designation ?? null,
+          category: row.category ?? null,
+          notes: row.notes ?? null,
+          qr_token: token,
+          status: "unused",
+          created_at: now,
+        });
+      }
+
+      if (attendeesToInsert.length > 0) {
+        const { error: insertError } = await supabase.from("attendees").insert(attendeesToInsert);
+        if (insertError) throw new Error(insertError.message);
+      }
+      importedRows = attendeesToInsert.length;
+    } else {
     await withDB(async (db) => {
       const event = db.events.find((row) => row.id === eventId);
       if (!event) {
         throw new Error("EVENT_NOT_FOUND");
       }
 
+      const existingTokens = new Set<string>(
+        db.attendees.filter((a) => a.eventId === eventId).map((a) => a.qrToken),
+      );
+
       for (const row of parsed.rows) {
         let token = generateQrToken(eventId);
-        while (existingTokens.has(token) || db.attendees.some((a) => a.eventId === eventId && a.qrToken === token)) {
+        while (existingTokens.has(token)) {
           token = generateQrToken(eventId);
         }
 
@@ -61,6 +113,7 @@ export async function POST(
         importedRows += 1;
       }
     });
+    }
 
     return NextResponse.json({
       success: true,
