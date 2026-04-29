@@ -1,10 +1,15 @@
 import "server-only";
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { DBShape } from "@/lib/types";
 
-const dataDir = path.join(process.cwd(), "data");
+// Vercel serverless filesystem is read-only except for the runtime temp directory.
+// Use a writable location there so JSON-backed storage can still function.
+const baseDataDir =
+  process.env.VERCEL === "1" ? path.join(os.tmpdir(), "gateqr-data") : path.join(process.cwd(), "data");
+const dataDir = baseDataDir;
 const dbPath = path.join(dataDir, "db.json");
 
 const defaultDB: DBShape = {
