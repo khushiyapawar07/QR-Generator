@@ -32,6 +32,8 @@ export default function ScannerEventPage({ params }: { params: Promise<{ eventId
   const [isScanning, setIsScanning] = useState(false);
   const [isProcessingCameraScan, setIsProcessingCameraScan] = useState(false);
   const processingRef = useRef(false);
+  const lastScannedRef = useRef<string | null>(null);
+  const lastScannedTimeRef = useRef<number>(0);
   const scannerElementId = "gateqr-scanner";
 
   async function startCameraScanner() {
@@ -50,10 +52,20 @@ export default function ScannerEventPage({ params }: { params: Promise<{ eventId
           if (processingRef.current) return;
           const qrToken = decodedText.trim();
           if (!qrToken) return;
+
+          const now = Date.now();
+          // If the same QR code is scanned within 3 seconds, ignore it to prevent flickering
+          if (lastScannedRef.current === qrToken && now - lastScannedTimeRef.current < 3000) {
+            return;
+          }
+
           processingRef.current = true;
           setIsProcessingCameraScan(true);
-          await stopCameraScanner();
+          lastScannedRef.current = qrToken;
+          lastScannedTimeRef.current = now;
+
           await handleCheckin(qrToken);
+          
           setIsProcessingCameraScan(false);
           processingRef.current = false;
         },
@@ -81,6 +93,8 @@ export default function ScannerEventPage({ params }: { params: Promise<{ eventId
       (window as Window & { __gateqrScanner?: Html5Qrcode }).__gateqrScanner = undefined;
       setIsScanning(false);
       processingRef.current = false;
+      lastScannedRef.current = null;
+      lastScannedTimeRef.current = 0;
     }
   }
 

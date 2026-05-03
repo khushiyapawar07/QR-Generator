@@ -48,6 +48,17 @@ export default function AdminPage() {
     }
   }
 
+  async function onDelete(eventId: string) {
+    if (!confirm("Are you sure you want to delete this event?")) return;
+    setLoading(true);
+    try {
+      await fetch(`/api/events/${eventId}`, { method: "DELETE" });
+      await loadEvents();
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <div className="mx-auto w-full max-w-6xl space-y-6 px-6 py-8">
       <div>
@@ -100,6 +111,13 @@ export default function AdminPage() {
               <Link className="btn-secondary text-sm" href={`/scanner/${eventRow.id}`}>
                 Open Scanner
               </Link>
+              <button
+                className="btn-secondary text-sm text-rose-600 border-rose-200 hover:bg-rose-50"
+                onClick={() => onDelete(eventRow.id)}
+                disabled={loading}
+              >
+                Delete
+              </button>
             </div>
           </div>
         ))}
